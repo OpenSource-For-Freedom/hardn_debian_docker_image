@@ -26,8 +26,8 @@ fi
 python3 -m pip install --no-cache-dir --upgrade pip setuptools requests pexpect || true
 
 echo "[+] Configuring AIDE..."
-install -d -m 0755 /etc/aide
-cat > /etc/aide/aide.conf <<'EOF'
+if install -d -m 0755 /etc/aide 2>/dev/null; then
+  cat > /etc/aide/aide.conf <<'EOF'
 database_in=file:/var/lib/aide/aide.db
 database_out=file:/var/lib/aide/aide.db.new
 gzip_dbout=yes
@@ -56,18 +56,27 @@ LOG = p+i+n+u+g+sha512
 !/var/cache
 EOF
 
-install -d -m 0700 /var/lib/aide
-touch /var/lib/aide/aide.db.new /var/lib/aide/aide.db
-aide --update --config /etc/aide/aide.conf || true
-aide -i        --config /etc/aide/aide.conf || true
+  if install -d -m 0700 /var/lib/aide 2>/dev/null; then
+    touch /var/lib/aide/aide.db.new /var/lib/aide/aide.db 2>/dev/null || true
+    aide --update --config /etc/aide/aide.conf || true
+    aide -i        --config /etc/aide/aide.conf || true
+  else
+    echo "WARN: Cannot write to /var/lib/aide (read-only filesystem), skipping AIDE database initialization"
+  fi
+else
+  echo "WARN: Cannot write to /etc/aide (read-only filesystem), skipping AIDE configuration"
+fi
 
 echo "[+] Writing legal banners..."
-echo "Unauthorized access is prohibited. All activity is monitored." > /etc/issue
-echo "Unauthorized access is prohibited. All activity is monitored." > /etc/issue.net
-chmod 0644 /etc/issue /etc/issue.net
+if echo "Unauthorized access is prohibited. All activity is monitored." > /etc/issue 2>/dev/null; then
+  echo "Unauthorized access is prohibited. All activity is monitored." > /etc/issue.net 2>/dev/null || true
+  chmod 0644 /etc/issue /etc/issue.net 2>/dev/null || true
+else
+  echo "WARN: Cannot write to /etc/issue* (read-only filesystem), skipping legal banners"
+fi
 
 echo "[+] Dropping sysctl hardening (best-effort in containers)..."
-cat > /etc/sysctl.d/99-hardening.conf <<'EOF'
+if mkdir -p /etc/sysctl.d 2>/dev/null && cat > /etc/sysctl.d/99-hardening.conf 2>/dev/null <<'EOF'
 net.ipv4.tcp_syncookies = 1
 net.ipv4.conf.all.rp_filter = 1
 net.ipv4.conf.default.rp_filter = 1
@@ -96,8 +105,11 @@ kernel.yama.ptrace_scope = 1
 net.core.bpf_jit_harden = 2
 net.ipv4.tcp_fin_timeout = 15
 EOF
-
-sysctl --system || echo "WARN: Some sysctl settings could not be applied in this container."
+then
+  sysctl --system || echo "WARN: Some sysctl settings could not be applied in this container."
+else
+  echo "WARN: Cannot write to /etc/sysctl.d (read-only filesystem), skipping sysctl hardening"
+fi
 
 echo "---------------------------------------------"
 echo " [+]    HARDN-XDR (RHEL9/UBI9) complete"
