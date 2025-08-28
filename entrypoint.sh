@@ -16,6 +16,13 @@ if [[ "$(id -u)" -eq 0 ]]; then
     fi
     echo "INFO: using STATE_DIR=$STATE_DIR"
   fi
-  exec su -s /bin/bash -c "${*:-tail -f /dev/null}" hardn
+  
+  # Check if we can switch users (test for CI environments with restricted capabilities)
+  if su -s /bin/true hardn 2>/dev/null; then
+    exec su -s /bin/bash -c "${*:-tail -f /dev/null}" hardn
+  else
+    echo "WARN: Cannot switch to hardn user (likely CI/test environment), running as root"
+    exec "${@:-tail -f /dev/null}"
+  fi
 fi
 exec "${@:-tail -f /dev/null}"
